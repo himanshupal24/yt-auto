@@ -1,0 +1,239 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  password  String?
+  role      Role     @default(USER)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // OAuth fields
+  googleId    String?
+  avatarUrl   String?
+
+  // Relations
+  channels    Channel[]
+  media       Media[]
+  videos      Video[]
+  tasks       Task[]
+  settings    UserSettings?
+
+  @@map("users")
+}
+
+model UserSettings {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  // Instagram sources (JSON array of URLs)
+  instagramSources String? // JSON stringified array
+  
+  // Auto-upload settings
+  autoUpload     Boolean @default(false)
+  
+  // Music preferences
+  musicGenres    String? // JSON stringified array
+  musicTone      String? // "upbeat", "calm", "energetic", etc.
+  
+  // Content preferences
+  contentTypes   String? // JSON stringified array: ["images_to_video", "reels", "long_form"]
+  
+  // Notifications
+  emailNotifications Boolean @default(true)
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("user_settings")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+model Channel {
+  id          String      @id @default(cuid())
+  userId      String
+  user        User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  youtubeChannelId String  @unique
+  channelName      String
+  channelHandle    String?
+  avatarUrl        String?
+  subscriberCount  Int?
+  isDefault        Boolean @default(false)
+  
+  accessToken      String?
+  refreshToken     String?
+  tokenExpiry      DateTime?
+  
+  defaultTitle       String?
+  defaultDescription String?
+  defaultTags        String?
+  defaultPrivacy     Privacy @default(PRIVATE)
+  
+  videos      Video[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("channels")
+}
+
+model Media {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type         MediaType
+  sourceUrl    String
+  downloadUrl  String?
+  fileName     String
+  fileSize     Int?
+  dimensions   String?
+  
+  instagramId       String?
+  instagramAccount  String?
+  caption           String?
+  downloadDate      DateTime @default(now())
+  
+  isProcessed       Boolean @default(false)
+  isCopyrightFree   Boolean @default(false)
+  flagged           Boolean @default(false)
+  
+  videos      VideoMedia[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("media")
+}
+
+enum MediaType {
+  IMAGE
+  VIDEO
+  REEL
+}
+
+enum Privacy {
+  PRIVATE
+  UNLISTED
+  PUBLIC
+}
+
+model Video {
+  id        String      @id @default(cuid())
+  userId    String
+  user      User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  channelId String?
+  channel   Channel?    @relation(fields: [channelId], references: [id])
+  
+  title         String
+  description   String?
+  tags          String?
+  duration      Int?
+  fileUrl       String?
+  thumbnailUrl  String?
+  
+  youtubeVideoId String?
+  uploadStatus   UploadStatus @default(DRAFT)
+  privacy        Privacy      @default(PRIVATE)
+  scheduledAt    DateTime?
+  publishedAt    DateTime?
+  
+  views         Int @default(0)
+  likes         Int @default(0)
+  comments      Int @default(0)
+  
+  status        VideoStatus @default(CREATED)
+  errorMessage  String?
+  
+  media         VideoMedia[]
+  tasks         Task[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("videos")
+}
+
+model VideoMedia {
+  id      String @id @default(cuid())
+  videoId String
+  video   Video  @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  mediaId String
+  media   Media  @relation(fields: [mediaId], references: [id], onDelete: Cascade)
+  
+  order   Int
+  
+  @@unique([videoId, mediaId])
+  @@map("video_media")
+}
+
+model Task {
+  id        String     @id @default(cuid())
+  userId    String
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  videoId   String?
+  video     Video?     @relation(fields: [videoId], references: [id])
+  
+  type         TaskType
+  status       TaskStatus @default(PENDING)
+  progress     Int        @default(0)
+  errorMessage String?
+  
+  data         String?
+  result       String?
+  
+  startedAt    DateTime?
+  completedAt  DateTime?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@map("tasks")
+}
+
+enum VideoStatus {
+  CREATED
+  PROCESSING
+  READY
+  UPLOADING
+  UPLOADED
+  FAILED
+}
+
+enum UploadStatus {
+  DRAFT
+  SCHEDULED
+  UPLOADING
+  PUBLISHED
+  FAILED
+}
+
+enum TaskType {
+  DOWNLOAD_MEDIA
+  PROCESS_VIDEO
+  UPLOAD_VIDEO
+  COPYRIGHT_CHECK
+}
+
+enum TaskStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+}
